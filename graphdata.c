@@ -374,7 +374,7 @@ vblank_to_svg(struct vblank *vbl, struct svg_context *ctx,
 	double t;
 
 	if (!is_in_range(ctx, &vbl->ts, &vbl->ts))
-		return 0;
+		return -1;
 
 	t = svg_get_x(ctx, &vbl->ts);
 	fprintf(ctx->fp, "<path d=\"M %.2f %.2f V %.2f\" />"
@@ -389,12 +389,16 @@ vblank_set_to_svg(struct vblank_set *vblanks, struct svg_context *ctx,
 		      double y1, double y2)
 {
 	struct vblank *vbl;
+	int cnt=0;
 
 	fprintf(ctx->fp, "<g class=\"vblank\">\n");
 
-	for (vbl = vblanks->vbl; vbl; vbl = vbl->next)
+	for (vbl = vblanks->vbl; vbl; vbl = vbl->next){
 		if (vblank_to_svg(vbl, ctx, y1, y2) < 0)
-			return ERROR;
+			continue;
+		cnt++;
+	}
+	fprintf(stdout, "%d\n", cnt);
 
 	fprintf(ctx->fp, "</g>\n");
 
@@ -786,7 +790,7 @@ graph_data_init_draw(struct graph_data *gdata, double *width, double *height)
 
 int
 graph_data_to_svg(struct graph_data *gdata, int from_ms, int to_ms,
-		  const char *filename)
+		  const char *filename, const char *display)
 {
 	struct output_graph *og;
 	struct svg_context ctx;
@@ -804,9 +808,12 @@ graph_data_to_svg(struct graph_data *gdata, int from_ms, int to_ms,
 
 	time_scale_to_svg(&ctx, gdata->time_axis_y);
 
-	for (og = gdata->output; og; og = og->next)
+	for (og = gdata->output; og; og = og->next){
+		if( display && strcmp(og->info->name, display))
+			continue;
 		if (output_graph_to_svg(og, &ctx) < 0)
 			return ERROR;
+	}
 
 	if (legend_to_svg(&ctx, gdata->legend_y) < 0)
 		return ERROR;

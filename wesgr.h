@@ -201,7 +201,7 @@ graph_data_time(struct graph_data *gdata, const struct timespec *ts);
 
 int
 graph_data_to_svg(struct graph_data *gdata, int from_ms, int to_ms,
-		  const char *filename);
+		  const char *filename, const char *display);
 
 int
 parse_context_init(struct parse_context *ctx, struct graph_data *gdata);

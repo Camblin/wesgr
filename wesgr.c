@@ -159,6 +159,8 @@ out_release:
 struct prog_args {
 	int from_ms;
 	int to_ms;
+	unsigned int split_ms;
+	const char *display;
 	const char *infile;
 	const char *svgfile;
 };
@@ -172,20 +174,24 @@ print_usage(const char *prog)
 	"  -i, --input=FILE          Read FILE as the input data.\n"
 	"  -o, --output=FILE         Write FILE as the output SVG.\n"
 	"  -a, --from-ms=MS          Start the graph at MS milliseconds.\n"
-	"  -b, --to-ms=MS            End the graph at MS milliseconds.\n",
+	"  -b, --to-ms=MS            End the graph at MS milliseconds.\n"
+	"  -s, --split=MS            Split the graph at MS milliseconds.\n"
+	"  -d, --display=DISPLAY     Select specific name of the display.\n",
 	prog);
 }
 
 static int
 parse_opts(struct prog_args *args, int argc, char *argv[])
 {
-	static const char short_opts[] = "hi:a:b:o:";
+	static const char short_opts[] = "hi:a:b:o:s:d:";
 	static const struct option opts[] = {
 		{ "help",              no_argument,       0, 'h' },
 		{ "input",             required_argument, 0, 'i' },
 		{ "from-ms",           required_argument, 0, 'a' },
 		{ "to-ms",             required_argument, 0, 'b' },
 		{ "output",            required_argument, 0, 'o' },
+		{ "split", 	       required_argument, 0, 's' },
+		{ "display", 	       required_argument, 0, 'd' },
 		{ NULL, 0, 0, 0 }
 	};
 
@@ -215,6 +221,12 @@ parse_opts(struct prog_args *args, int argc, char *argv[])
 		case 'o':
 			args->svgfile = optarg;
 			break;
+		case 's':
+			args->split_ms = atoi(optarg);
+			break;
+		case 'd':
+			args->display = optarg;
+			break;
 		default:
 			break;
 		}
@@ -235,7 +247,7 @@ parse_opts(struct prog_args *args, int argc, char *argv[])
 int
 main(int argc, char *argv[])
 {
-	struct prog_args args = { -1, -1, NULL, NULL };
+	struct prog_args args = { -1, -1, 0, NULL, NULL, NULL };
 	struct graph_data gdata;
 	struct parse_context ctx;
 
@@ -247,7 +259,7 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	if (!args.svgfile) {
+	if (!args.svgfile && args.split_ms == 0 ) {
 		fprintf(stderr, "Error: output file not specified.\n");
 		return 1;
 	}
@@ -261,9 +273,30 @@ main(int argc, char *argv[])
 	if (parse_file(args.infile, &ctx) < 0)
 		return 1;
 
-	if (graph_data_to_svg(&gdata, args.from_ms, args.to_ms,
-			      args.svgfile) < 0)
-		return 1;
+	if( args.split_ms == 0){
+		if (graph_data_to_svg(&gdata, args.from_ms, args.to_ms,
+					args.svgfile, args.display) < 0)
+			return 1;
+	}
+	else {
+		int cnt=0;
+		char buf[4096];
+		time_t end_ms;
+		fprintf(stdout, "File is splited each %d ms\n", args.split_ms);
+		args.to_ms = 0;
+		args.from_ms = 0;
+		end_ms = ((gdata.end.tv_sec*1000 + gdata.end.tv_nsec /1000000)-(gdata.begin.tv_sec*1000 + gdata.begin.tv_nsec /1000000)) / 1000 * 1000;
+		fprintf(stdout, "end : %ld\n", end_ms/1000);
+		while(args.to_ms < end_ms) {
+			sprintf(buf, "output_%08d.svg", cnt++);
+			args.from_ms = args.to_ms;
+			args.to_ms += args.split_ms;
+			fprintf(stdout, " %s,", buf);
+			if (graph_data_to_svg(&gdata, args.from_ms, args.to_ms,
+						buf, args.display) < 0)
+				break;
+		}
+	}
 
 	parse_context_release(&ctx);
 	graph_data_release(&gdata);
